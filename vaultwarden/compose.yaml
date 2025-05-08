@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vaultwarden
+      POSTGRES_USER: warden
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./db_data:/var/lib/postgresql/data
+    networks:
+      - vw
+  vaultwarden:
+    image: vaultwarden/server:latest
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - vw
+    ports:
+      - 6004:80
+    environment:
+      - DATABASE_URL=postgres://warden:${POSTGRES_PASSWORD}@db/vaultwarden
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
+      - SIGNUPS_ALLOWED=true # Change to false after first login
+      - INVITATION_ORG_NAME=Perfect Catch Ai
+      - INVITATIONS_ALLOWED=true
+      - INVITATION_EXPIRATION_HOURS=3
+      - WEBSOCKET_ENABLED=true
+      - LOG_FILE=/var/log/docker/bitwarden.log
+    volumes:
+      - ./vw_data:/data
+      - ./vwlog:/var/log/docker
+      - /etc/localtime:/etc/localtime:ro
+networks:
+  vw:
+    external: true

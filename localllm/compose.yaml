@@ -1,0 +1,87 @@
+services:
+  litellm-db:
+    restart: unless-stopped
+    container_name: litellm-db
+    hostname: litellm-db
+    image: postgres:16-alpine
+    networks:
+      - llm
+    #  ports:
+    #    - 6432:5432
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./litellm-db:/var/lib/postgresql/data:rw
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  ollama:
+    restart: unless-stopped
+    container_name: ollama
+    hostname: ollama
+    stdin_open: true
+    tty: true
+    user: root
+    image: ollama/ollama:latest
+    networks:
+      - llm
+    ports:
+      - 11434:11434
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities:
+                - gpu
+              count: all
+    volumes:
+      - ./ollama-local:/root/.ollama
+  litellm:
+    restart: unless-stopped
+    container_name: litellm
+    hostname: litellm
+    image: ghcr.io/berriai/litellm:main-latest
+    stdin_open: true
+    tty: true
+    user: root
+    networks:
+      - llm
+    ports:
+      - 6002:4000
+    depends_on:
+      - litellm-db
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@litellm-db:5432/${POSTGRES_DB}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY}
+      UI_USERNAME: ${UI_USERNAME}
+      UI_PASSWORD: ${UI_PASSWORD}
+      STORE_MODEL_IN_DB: "True"
+  openWebUI:
+    restart: unless-stopped
+    container_name: openwebui
+    hostname: openwebui
+    image: ghcr.io/open-webui/open-webui:latest
+    stdin_open: true
+    tty: true
+    user: root
+    networks:
+      - llm
+    ports:
+      - 6003:8080
+    volumes:
+      - ./open-webui-local:/app/backend/data
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_BASE_URLS: http://ollama:11434
+networks:
+  llm:
+    external: true
